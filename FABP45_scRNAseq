@@ -1,0 +1,321 @@
+### Analysis of FABP4/5 Paper
+
+## scRNAseq analysis
+# Load packages
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(scDblFinder)
+library(SingleCellExperiment)
+
+## Load data
+wt.counts <- Read10X(data.dir = "./Raw_data/WT/filtered_feature_bc_matrix/")
+wt <- CreateSeuratObject(counts = wt.counts, project = "WT", min.cells = 3, min.features = 200)
+
+cko.counts <- Read10X(data.dir = "./Raw_data/CKO/filtered_feature_bc_matrix/")
+cko <- CreateSeuratObject(counts = wk6.2.counts, project = "CKO", min.cells = 3, min.features = 200)
+
+phd_Feature.data <- Read10X(data.dir = "~/Raw_data/CD133/filtered_feature_bc_matrix/")
+rownames(x = phd_Feature.data[["Antibody Capture"]]) <- gsub(pattern = "_[control_]*TotalB",replacement = "",x = rownames(x = phd_Feature.data[["Antibody Capture"]]))
+WT_Feature <- CreateSeuratObject(counts = phd_Feature.data[["Gene Expression"]], project = "WT", min.cells = 3, min.features = 200)
+CKO_Feature <- CreateSeuratObject(counts = phd_Feature.data[["Gene Expression"]], project = "CKO", min.cells = 3, min.features = 200)
+
+TKO_Feature.data <- Read10X(data.dir = "~/Raw_data/TKO_Feature/filtered_feature_bc_matrix/")
+rownames(x = TKO_Feature.data[["Antibody Capture"]]) <- gsub(pattern = "_[control_]*TotalB",replacement = "",x = rownames(x = TKO_Feature.data[["Antibody Capture"]]))
+TKO_Feature <- CreateSeuratObject(counts = TKO_Feature.data[["Gene Expression"]], project = "TKO", min.cells = 3, min.features = 200)
+
+# Calculate mitochondrial percentages
+wt[["percent.mt"]] <- PercentageFeatureSet(wt, pattern = "^mt-")
+cko[["percent.mt"]] <- PercentageFeatureSet(cko, pattern = "^mt-")
+WT_Feature[["percent.mt"]] <- PercentageFeatureSet(WT_Feature, pattern = "^mt-")
+CKO_Feature[["percent.mt"]] <- PercentageFeatureSet(CKO_Feature, pattern = "^mt-")
+TKO_Feature[["percent.mt"]] <- PercentageFeatureSet(TKO_Feature, pattern = "^mt-")
+
+# QC violin plot
+VlnPlot(wt, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+VlnPlot(cko, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+VlnPlot(WT_Feature, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+VlnPlot(CKO_Feature, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+VlnPlot(TKO_Feature, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+## QC scatter plot
+plot1 <- FeatureScatter(wt, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(wt, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+
+plot1 <- FeatureScatter(cko, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(cko, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+
+plot1 <- FeatureScatter(WT_Feature, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(WT_Feature, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+
+plot1 <- FeatureScatter(CKO_Feature, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(CKO_Feature, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+
+plot1 <- FeatureScatter(TKO_Feature, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(TKO_Feature, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+
+# Subset dataset to filter out low quality cells
+wt <- subset(wt, subset = nFeature_RNA > 200 & nFeature_RNA < 6000 & percent.mt < 10)
+cko <- subset(cko, subset = nFeature_RNA > 200 & nFeature_RNA < 6000 & percent.mt < 10)
+WT_Feature <- subset(WT_Feature, subset = nFeature_RNA > 200 & nFeature_RNA < 6000 & percent.mt < 10)
+CKO_Feature <- subset(CKO_Feature, subset = nFeature_RNA > 200 & nFeature_RNA < 6000 & percent.mt < 10)
+TKO_Feature <- subset(TKO_Feature, subset = nFeature_RNA > 200 & nFeature_RNA < 6000 & percent.mt < 10)
+
+# Doublelet detection
+wt_sce <- as.SingleCellExperiment(wt)
+wt_sce <- scDblFinder(wt_sce, verbose = TRUE, nfeatures = 1000)
+wt_sce <- as.Seurat(wt_sce, data = NULL)
+wt <- AddMetaData(wt, col.name = "DoubletScore", metadata = wt_sce$scDblFinder.score)
+wt <- AddMetaData(wt, col.name = "DoubletClass", metadata = wt_sce$scDblFinder.class)
+wt <- subset(wt, subset = DoubletClass == "singlet")
+
+cko_sce <- as.SingleCellExperiment(cko)
+cko_sce <- scDblFinder(cko_sce, verbose = TRUE, nfeatures = 1000)
+cko_sce <- as.Seurat(cko_sce)
+cko <- AddMetaData(cko, col.name = "DoubletScore", metadata = cko_sce$scDblFinder.score)
+cko <- AddMetaData(cko, col.name = "DoubletClass", metadata = cko_sce$scDblFinder.class)
+cko <- subset(cko, subset = DoubletClass == "singlet")
+
+WT_Feature_sce <- as.SingleCellExperiment(WT_Feature)
+WT_Feature_sce <- scDblFinder(WT_Feature_sce, verbose = TRUE, nfeatures = 1000)
+WT_Feature_sce <- as.Seurat(WT_Feature_sce)
+WT_Feature <- AddMetaData(WT_Feature, col.name = "DoubletScore", metadata = WT_Feature_sce$scDblFinder.score)
+WT_Feature <- AddMetaData(WT_Feature, col.name = "DoubletClass", metadata = WT_Feature_sce$scDblFinder.class)
+WT_Feature <- subset(WT_Feature, subset = DoubletClass == "singlet")
+
+CKO_Feature_sce <- as.SingleCellExperiment(CKO_Feature)
+CKO_Feature_sce <- scDblFinder(CKO_Feature_sce, verbose = TRUE, nfeatures = 1000)
+CKO_Feature_sce <- as.Seurat(CKO_Feature_sce)
+CKO_Feature <- AddMetaData(CKO_Feature, col.name = "DoubletScore", metadata = CKO_Feature_sce$scDblFinder.score)
+CKO_Feature <- AddMetaData(CKO_Feature, col.name = "DoubletClass", metadata = CKO_Feature_sce$scDblFinder.class)
+CKO_Feature <- subset(CKO_Feature, subset = DoubletClass == "singlet")
+
+TKO_Feature_sce <- as.SingleCellExperiment(TKO_Feature)
+TKO_Feature_sce <- scDblFinder(TKO_Feature_sce, verbose = TRUE, nfeatures = 1000)
+TKO_Feature_sce <- as.Seurat(TKO_Feature_sce)
+TKO_Feature <- AddMetaData(TKO_Feature, col.name = "DoubletScore", metadata = TKO_Feature_sce$scDblFinder.score)
+TKO_Feature <- AddMetaData(TKO_Feature, col.name = "DoubletClass", metadata = TKO_Feature_sce$scDblFinder.class)
+TKO_Feature <- subset(TKO_Feature, subset = DoubletClass == "singlet")
+
+
+## Integrate 5 datasets
+lung.list <- list(wt, cko, WT_Feature, CKO_Feature, TKO_Feature)
+lung.list <- lapply(X = sc.list, FUN = function(x) {
+          x <- NormalizeData(x)
+          x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+      })
+
+features <- SelectIntegrationFeatures(object.list = lung.list)
+lung.anchors <- FindIntegrationAnchors(object.list = lung.list, anchor.features = features)
+lung.combined <- IntegrateData(anchorset = lung.anchors)
+
+## Dimention reduction and clustering
+DefaultAssay(lung.combined) <- "integrated"
+lung.combined <- ScaleData(lung.combined, verbose = FALSE)
+lung.combined <- RunPCA(lung.combined, npcs = 50, verbose = FALSE)
+VizDimLoadings(lung.combined, dims = 1:2, reduction = "pca")
+DimPlot(lung.combined, reduction = "pca")
+
+lung.combined <- JackStraw(lung.combined, num.replicate = 100)
+lung.combined <- ScoreJackStraw(lung.combined, dims = 1:20)
+JackStrawPlot(lung.combined, dims = 1:20)
+ElbowPlot(lung.combined, ndims = 50)
+lung.combined <- RunUMAP(lung.combined, reduction = "pca", dims = 1:30)
+lung.combined <- FindNeighbors(lung.combined, reduction = "pca", dims = 1:30)
+lung.combined <- FindClusters(lung.combined, resolution = 0.5)
+
+## Save Seurat object
+saveRDS(lung.combined, file = "Mouse_lung_WT_CKO_TKO.rds")
+
+## Plotting markers in module 
+library(RColorBrewer)
+DefaultAssay(lung.combined) <- "RNA"
+lung.combined <- NormalizeData(lung.combined)
+lung.markers <- FindAllMarkers(lung.combined, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+write.table(lung.markers, "lung_all_markers.txt", sep = "\t")
+
+pan.pt.enriched <- c("Slc34a1", "Lrp2", "Hxyd2", "Hrsp12", "Acsm1", "Acsm2", "Cpt1a", "Acox3", "Slc26a6", "Slc9a3", "Glud1", "Pck1", "Aqp8", "Hnf4a", "Ppara")
+sp.8wks <- AddModuleScore(sp.8wks, features = list(pan.pt.enriched), name="Pan_PT_enriched")
+FeaturePlot(sp.8wks, features = "Pan_PT_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+EC.enriched <- c("Cdh5", "Pecam1")
+lung.combined <- AddModuleScore(lung.combined, features = list(EC.enriched), name="EC_enriched")
+FeaturePlot(lung.combined, features = "EC_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Artery.enriched <- c("Mgp", "Cxcl12", "Tm4sf1", "Plat", "Gja4", "Plac8", "Mecom",  "Atp13a3", "Gja5")
+lung.combined <- AddModuleScore(lung.combined, features = list(Artery.enriched), name="Artery_enriched")
+FeaturePlot(lung.combined, features = "Artery_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+gCapillary.enriched <- c("Aplnr", "Plvap", "Gpihbp1", "Socs3", "Cd93", "Sema3c")
+lung.combined <- AddModuleScore(lung.combined, features = list(gCapillary.enriched), name="gCapillary_enriched")
+FeaturePlot(lung.combined, features = "gCapillary_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Vein.enriched <- c("Prss23", "Slc6a2", "Vwf", "Cd200", "Bgn", "Ackr3", "Lyve1", "Tmem252", "Amigo2", "Vcam1")
+lung.combined <- AddModuleScore(lung.combined, features = list(Vein.enriched), name="Vein_enriched")
+FeaturePlot(lung.combined, features = "Vein_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+aCapillary.enriched <- c("Chst1", "Tbx2", "Car4", "Igfbp7", "Fibin", "Ednrb", "Tbx2", "Cdkn2b", "Ptprb")
+lung.combined <- AddModuleScore(lung.combined, features = list(aCapillary.enriched), name="aCapillary_enriched")
+FeaturePlot(lung.combined, features = "aCapillary_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+SMC.enriched <- c("Acta2", "Myh11", "Cnn1", "Itga7", "Ntrk3")
+lung.combined <- AddModuleScore(lung.combined, features = list(SMC.enriched), name="SMC_enriched")
+FeaturePlot(lung.combined, features = "SMC_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Pericyte.enriched <- c("Notch3", "Pdgfrb", "Cspg4", "Lamc3", "Trpc6", "Higd1b", "Fam162b")
+lung.combined <- AddModuleScore(lung.combined, features = list(Pericyte.enriched), name="Pericyte_enriched")
+FeaturePlot(lung.combined, features = "Pericyte_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Fibroblast.enriched <- c("Fn1", "Col1a1")
+lung.combined <- AddModuleScore(lung.combined, features = list(Fibroblast.enriched), name="Fibroblast_enriched")
+FeaturePlot(lung.combined, features = "Fibroblast_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+LEC.enriched <- c("Prox1", "Ccl21a", "Hoxd3", "Reln", "Ptx3", "Nts")
+lung.combined <- AddModuleScore(lung.combined, features = list(LEC.enriched), name="LEC_enriched")
+FeaturePlot(lung.combined, features = "LEC_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+PMN.enriched <- c("S100a9", "S100a8", "Mmp9", "Gm5416", "Asprv1", "Stfa2")
+lung.combined <- AddModuleScore(lung.combined, features = list(PMN.enriched), name="PMN_enriched")
+FeaturePlot(lung.combined, features = "PMN_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+AT2.enriched <- c("Sftpc", "Sftpb", "Lamp3")
+lung.combined <- AddModuleScore(lung.combined, features = list(AT2.enriched), name="AT2_enriched")
+FeaturePlot(lung.combined, features = "AT2_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+AT1.enriched <- c("Aqp5", "Hopx", "Ager", "Rtkn2")
+lung.combined <- AddModuleScore(lung.combined, features = list(AT1.enriched), name="AT1_enriched")
+FeaturePlot(lung.combined, features = "AT1_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Treg.enriched <- c("Foxp3", "Ctla4","Il2ra", "Folr4", "Icos", "Tnfrsf18", "Tnfrsf4")
+lung.combined <- AddModuleScore(lung.combined, features = list(Treg.enriched), name="Treg_enriched")
+FeaturePlot(lung.combined, features = "Treg_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Cd4_T.enriched <- c("Cd40lg", "Cd4","Trat1", "Nsg2", "Lef1", "Cd3e", "Ccr7")
+lung.combined <- AddModuleScore(lung.combined, features = list(Cd4_T.enriched), name="CD4T_enriched")
+FeaturePlot(lung.combined, features = "CD4T_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Cd8_T.enriched <- c("Cd8a", "Cd8b1","Cd3e", "Cd3d", "Trac", "Cd27", "Ccr7")
+lung.combined <- AddModuleScore(lung.combined, features = list(Cd8_T.enriched), name="CD8T_enriched")
+FeaturePlot(lung.combined, features = "CD8T_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+NK.enriched <- c("Klrc1","Klrb1c", "Klre1", "Ncr1", "Xcl1", "Tbx21")
+lung.combined <- AddModuleScore(lung.combined, features = list(NK.enriched), name="NK_enriched")
+FeaturePlot(lung.combined, features = "NK_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Bcell.enriched <- c("Ighm", "Cd19", "Pax5", "Cd79a", "Igkc")
+lung.combined <- AddModuleScore(lung.combined, features = list(Bcell.enriched), name="B.cells_enriched")
+FeaturePlot(lung.combined, features = "B.cells_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+DC.enriched <- c("Xcr1", "Gucy2c", "Sept3", "Gpr82", "flt3", "Cd209a", "Cd209d", "Clec10a", "Mgl2", "Ccl17")
+lung.combined <- AddModuleScore(lung.combined, features = list(DC.enriched), name="DC_enriched")
+FeaturePlot(lung.combined, features = "DC_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+iMac.enriched <- c("C1qa", "Fcrls", "Folr2", "Ccl12", "Ms4a7", "C1qc", "C1qb")
+lung.combined <- AddModuleScore(lung.combined, features = list(iMac.enriched), name="iMac_enriched")
+FeaturePlot(lung.combined, features = "iMac_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+aMac.enriched <- c("Olr1", "F7", "Marco", "Atp6v0d2", "Gpnmb", "Pparg", "Ear2")
+lung.combined <- AddModuleScore(lung.combined, features = list(aMac.enriched), name="aMac_enriched")
+FeaturePlot(lung.combined, features = "aMac_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+inMono.enriched <- c("Ifitm6", "Fcnb", "Gpr141", "Gm9733", "Mnda", "Tifab", "Mmp8")
+lung.combined <- AddModuleScore(lung.combined, features = list(inMono.enriched), name="inMono_enriched")
+FeaturePlot(lung.combined, features = "inMono_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Master.enriched <- c("Tpsab1", "Mrgprb2", "Mrgprb1", "Tpsb2")
+lung.combined <- AddModuleScore(lung.combined, features = list(Master.enriched), name="Master_enriched")
+FeaturePlot(lung.combined, features = "Master_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+AF1.enriched <- c("Wnt2", "Meox2","Slc38a5", "Tcf21", "Col13a1", "Figf", "Enpep", "Adh1")
+lung.combined <- AddModuleScore(lung.combined, features = list(AF1.enriched), name="AF1_enriched")
+FeaturePlot(lung.combined, features = "AF1_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+AdvFib.enriched <- c("Aspn", "Serpinf1","Pi16", "Sfrp2")
+lung.combined <- AddModuleScore(lung.combined, features = list(AdvFib.enriched), name="AdvFib_enriched")
+FeaturePlot(lung.combined, features = "AdvFib_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+AF2.enriched <- c("Abca8a", "Agtr2", "Lum", "Scara5", "Entpd2", "Clec3b", "Htra3")
+lung.combined <- AddModuleScore(lung.combined, features = list(AF2.enriched), name="AF2_enriched")
+FeaturePlot(lung.combined, features = "AF2_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Basal.enriched <- c("Krt5", "Pitx1","Sprr2a3", "Capns2", "Pkp1", "Sprr2b", "Trp63")
+lung.combined <- AddModuleScore(lung.combined, features = list(Basal.enriched), name="Basal_enriched")
+FeaturePlot(lung.combined, features = "Basal_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Cilliated.enriched <- c("Ankrd65", "Gm867","Aoc1", "Ldlrad1", "Fam216b", "Cdhr3", "Barx2")
+lung.combined <- AddModuleScore(lung.combined, features = list(Cilliated.enriched), name="Cilliated_enriched")
+FeaturePlot(lung.combined, features = "Cilliated_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+secretory.enriched <- c("Gabrp", "Gm15883", "Slc16a11", "Pon1", "Gsta3", "Scga1a1", "Scgb3a2")
+lung.combined <- AddModuleScore(lung.combined, features = list(secretory.enriched), name="secretory_enriched")
+FeaturePlot(lung.combined, features = "secretory_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Mesothelial.enriched <- c("Lrm4", "Upk3b","Wt1", "Slurp1", "Tmem151a", "Aldh1a2", "Cldn15")
+lung.combined <- AddModuleScore(lung.combined, features = list(Mesothelial.enriched), name="Mesothelial_enriched")
+FeaturePlot(lung.combined, features = "Mesothelial_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Platelet.enriched <- c("Gp5", "Tubb1","Gp6", "Ly6g6f", "Mpl", "F2rl2", "Gfi1b")
+lung.combined <- AddModuleScore(lung.combined, features = list(Platelet.enriched), name="Platelet_enriched")
+FeaturePlot(lung.combined, features = "Platelet_enriched1", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+## Annotation of celltype
+lung.combined <- RenameIdents(lung.combined, '1' = "EC", '5' = "EC", '7' = "EC", '11' = "EC", '16' = "EC", '18' = "EC", '14' = "AT1", '6' = "AT2", '17' = "Pericyte", 
+'22' = "SMC", '4' = "Fibroblast", '19' = "Secretory_Cilliated", '0' = "aMac", '15' = "aMac", '12' = "iMac", '9' = "inMono", '23' = "DC", '13' = "PMN", '8' = "B-cell", 
+'20' = "B-cell", '2' = "T-cell", '3' = "T-cell", '25' = "T-cell", '10' = "NK", '24' = "LEC", '21' = "Proliferating cells")
+lung.combined[["celltype"]] <- Idents(lung.combined)
+
+## EC subclustering
+lung.ec <- subset(lung.combined, idents = "EC")
+DefaultAssay(lung.ec) <- "RNA"
+lung.ec <- NormalizeData(lung.ec)
+DefaultAssay(lung.ec) <- "integrated"
+lung.ec <- ScaleData(lung.ec, verbose = FALSE)
+lung.ec <- RunPCA(lung.ec, npcs = 30, verbose = FALSE)
+VizDimLoadings(lung.ec, dims = 1:2, reduction = "pca")
+DimPlot(lung.ec, reduction = "pca")
+lung.ec <- JackStraw(lung.ec, num.replicate = 100)
+lung.ec <- ScoreJackStraw(lung.ec, dims = 1:20)
+JackStrawPlot(lung.ec, dims = 1:20)
+ElbowPlot(lung.ec, ndims = 30)
+lung.ec <- RunUMAP(lung.ec, reduction = "pca", dims = 1:20)
+lung.ec <- FindNeighbors(lung.ec, reduction = "pca", dims = 1:20)
+lung.ec <- FindClusters(lung.ec, resolution = 0.1)
+saveRDS(lung.ec, file = "Mouse_lung_EC_subclusters_WT_CKO_TKO.rds")
+
+DefaultAssay(lung.ec) <- "RNA"
+lung.ec <- NormalizeData(lung.ec)
+ec.markers <- FindAllMarkers(lung.ec, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+write.table(ec.markers, "ec_subcluster_markers.txt", sep = "\t")
+
+lung.ec <- RenameIdents(lung.ec, '0' = "gCap", '2' = "gCap",  '1' = "ArtEC", '3' = "aCap", '4' = "Vein")
+lung.ec[["ec.sub"]] <- Idents(lung.ec)
+
+
+## Macrophage subclustering
+lung.mac <- subset(lung.combined, idents = c("aMac", "iMac", "inMono"))
+DefaultAssay(lung.mac) <- "RNA"
+lung.mac <- NormalizeData(lung.mac)
+DefaultAssay(lung.mac) <- "integrated"
+lung.mac <- ScaleData(lung.mac, verbose = FALSE)
+lung.mac <- RunPCA(lung.mac, npcs = 30, verbose = FALSE)
+VizDimLoadings(lung.mac, dims = 1:2, reduction = "pca")
+DimPlot(lung.mac, reduction = "pca")
+lung.mac <- JackStraw(lung.mac, num.replicate = 100)
+lung.mac <- ScoreJackStraw(lung.mac, dims = 1:20)
+JackStrawPlot(lung.mac, dims = 1:20)
+ElbowPlot(lung.mac, ndims = 30)
+lung.mac <- RunUMAP(lung.mac, reduction = "pca", dims = 1:20)
+lung.mac <- FindNeighbors(lung.mac, reduction = "pca", dims = 1:20)
+lung.mac <- FindClusters(lung.mac, resolution = 0.1)
+saveRDS(lung.mac, file = "Mouse_lung_Macrophage_subclusters_WT_CKO_TKO.rds")
+
+
