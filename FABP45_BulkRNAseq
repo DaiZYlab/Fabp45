@@ -1,0 +1,56 @@
+### Analysis of FABP4/5 Paper_1
+
+## BulkRNAseq analysis
+#If there are any modules loaded, remove them.
+module purge
+module load samtools/1.6
+module load pigz/2.4
+module load boost/1.56.0
+module load gcc/4.8.3
+
+# Running FastQ_screen to look for contamination.
+module load bowtie2/2.2.6
+module load perl/5.16
+
+# Check all reference genomes currently installed
+perl ~/bin/fastq_screen_v0.11.4/fastq_screen --threads 12 --aligner bowtie2 --conf ~/bin/fastq_screen_v0.11.4/fastq_screen.allRefs.conf --outdir ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastqc ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1_R1.fastq.gz
+
+# Setting up trimming for sample WT_Rep1 for paired end reads.
+# Trim PE poor quality sequence with TRAILING:30 MINLEN:20 (see Trimmomatic documentation)
+java -jar ~/bin/Trimmomatic-0.33/trimmomatic-0.33.jar PE -threads 12 -phred33 ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1_R1.fastq.gz ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1_R2.fastq.gz /projects/b1042/PanosLab/Yalu/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1_R1.fastq.trimmed.gz /projects/b1042/PanosLab/Yalu/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1_R1U.fastq.trimmed.gz /projects/b1042/PanosLab/Yalu/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1_R2.fastq.trimmed.gz ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1_R2U.fastq.trimmed.gz TRAILING:30 MINLEN:20
+
+./bin/FastQC/fastqc -t 6 -o ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastqc ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1*.fastq.gz ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1*.fastq.trimmed.gz
+date
+
+# Align reads with STAR
+module load STAR/2.5.2
+# Adding Readgroups from rgstring ID:WT_Rep1 LB:WT_Rep1 PU:nextseq DT:2023-12-05 SM:WT_Rep1 CN:ASH PL:illumina
+STAR --runMode alignReads --genomeDir ~/anno/STAR_indexes/mm10/ --runThreadN 12 --readFilesIn ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1_R1.fastq.trimmed.gz ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/fastq/WT_Rep1_R2.fastq.trimmed.gz --readFilesCommand zcat -c --outFileNamePrefix ./Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/STAR_aln/WT_Rep1 --outSAMtype BAM Unsorted --chimSegmentMin 20 --quantMode TranscriptomeSAM --outReadsUnmapped Fastq --outMultimapperOrder Random --outSAMattrRGline ID:WT_Rep1 LB:WT_Rep1 PU:nextseq DT:2023-12-05 SM:WT_Rep1 CN:ASH PL:illumina --outSAMmapqUnique 60 --outFilterMultimapNmax 20 --outFilterMismatchNmax 2
+
+# Sort the output of STAR (outputting sorted BAMs from STAR took too much memory)
+samtools sort -@ 12 -o ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/STAR_aln/WT_Rep1Aligned.sortedByCoord.out.bam ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/STAR_aln/WT_Rep1Aligned.out.bam
+date
+ln -s ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/STAR_aln/WT_Rep1Aligned.sortedByCoord.out.bam ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/bam/WT_Rep1.bam
+date
+cd ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/bam
+samtools index -@ 12 ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/bam/WT_Rep1.bam
+module unload mpi
+module load python/anaconda3
+
+# Run htseq-count for WT_Rep1, stranded = 1
+htseq-count -f bam -q -m intersection-nonempty -s reverse -t exon -i gene_id ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/bam/WT_Rep1.bam ~/anno/Ens/mm10.Ens_78/mm10.Ens_78.cuff.gtf > ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/bam/WT_Rep1.htseq.counts
+
+# Wait for htseq jobs to finish, then start more.
+wait
+module unload python/anaconda3
+module load gcc/4.8.3
+module load R/3.2.2
+
+# Make Analysis directory for all analysis files.
+mkdir ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/analysis
+
+# Make HTseq counts table.
+perl ~/tools/bin/makeHTseqCountsTable.pl ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/bam// ~/anno/Ens/mm10.Ens_78/mm10.Ens_78.cuff.gtf ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/bam//
+
+# Run EdgeR, using comparisons file, without MDS plot (which sometimes crashes), htseq.
+Rscript ~/tools/bin/runEdgeRrnaSeq.2.R --assembly=mm10 --countFile= ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/bam//htseq.all.counts.txt --comparisonFile= ~/Data/FABP4_Dai/bulk_RNAseq/pipeline/comparison.csv --numCores=1 --outputDirectory= ~/Data/FABP4_Dai/bulk_RNAseq/pipeline//bulk_RNAseq/analysis --runMDS=0
