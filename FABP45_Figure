@@ -1,0 +1,235 @@
+### Analysis of FABP4/5 Paper_Figures
+
+## VlnPlot of Fabp4 and Fabp5 (Fig1.A)
+Idents(lung.combined) <- "orig.ident"
+lung.wt.cko <- subset(lung.combined, idents = c("WT", "CKO"))
+Idents(lung.wt.cko) <- "celltype"
+DefaultAssay(lung.wt.cko) <- "RNA"
+lung.wt.cko <- NormalizeData(lung.wt.cko)
+VlnPlot(lung.wt.cko, features = "Fabp4", split.by = "orig.ident")
+VlnPlot(lung.wt.cko, features = "Fabp5", split.by = "orig.ident")
+
+## PCA plot （Fig5.A）
+library(ggplot2)
+exprsFile <- "~/Data/FABP45_bulkRNAseq/analysis/htseq.normCounts.txt"
+data.matrix <- as.matrix(read.table(exprsFile, header = TRUE, sep="\t", row.names = 1, as.is = TRUE))
+pca <- prcomp(t(data.matrix), scale = TRUE)
+plot(pca$x[,1], pca$x[,2])
+pca.var <- pca$sdev^2
+pca.var.per <- round(pca.var/sum(pca.var)*100,1)
+barplot(pca.var.per, main = "Scree Plot", xlab = "Principal Component", ylab = "Percent Variation")
+pca.data <- data.frame(Sample=rownames(pca$x), X=pca$x[,1], Y=pca$x[,2])
+pca.data
+pca.data$color <- factor(pca.data$color, level = c("red", "blue", "green", "purple"))
+colr <- as.character(unique(pca.data$color))
+colr
+ggplot(pca.data, aes(X,Y))+geom_point(aes(color=color))+ggtitle("PCA plot")+ylim(-80,60)+xlim(-120,110)+xlab("PC1")+ylab("PC2")+theme_bw()+theme(panel.border=element_rect(size=1), 
+panel.grid.major=element_blank(), panel.grid.minor=element_blank(), axis.line=element_line(colour="black"), legend.title=element_blank(), legend.box.background=element_rect(size=0))
++scale_color_manual(labels=c(paste("CKO"),paste("TKO"),paste("WT")), values=colr)
+
+
+## Heatmap with pheatmap (Fig5.B)
+# Load package
+library(pheatmap)
+# Load expression data
+exprsFile <- "~/Data/FABP45_bulkRNAseq/Heatmap_PKO_vs_WT_adj_0.5_avg_reads_30.txt"
+exprs <- as.matrix(read.table(exprsFile, header = TRUE, sep = "\t", row.names = 1, as.is = TRUE))
+exp <- log2(exprs+1)
+# Load metadata
+pData <- "~/Data/FABP45_bulkRNAseq/heatmap_metadata.txt"
+annotation <- read.table(pData, header = TRUE, sep = "\t", row.names = 1)
+## define color
+hmcol <- colorRampPalette(c("blue", "white", "red"))(256)
+ann_colors = list(sampletype = c(WT="blue", PKO="red", TKO="green"))
+pheatmap(exp, color = hmcol, annotation = annotation, cluster_cols = F, cluster_rows = T, show_rownames=F, annotation_colors= ann_colors, fontsize = 10, scale="row",fontsize_row = 10, height=20)
+
+
+## Dotplot enrichment analysis (Fig5.D, Fig6.D, Fig6.E)
+# Load library and data
+library(ggplot2)
+exprsFile <- "~/Data/FABP45_scRNAseq/Analysis/Pathway_Enrichment/Bubble_Chart_Hallmark_Up_Genes_EC_CKO_vs_WT.txt"
+data <- read.table(exprsFile, sep ="\t", header = TRUE, stringsAsFactors = FALSE)
+S1<- ggplot(data, aes(x= NES, y=reorder(Pathway,-FDR), size=DEGs, color=FDR)) + geom_point(alpha = 0.8) 
+S1 = S1+scale_color_gradient(low = "red2",  high = "mediumblue", space = "Lab", limit = c(9e-19, 3.20e-05))+scale_size(range = c(2, 8))
+S1+theme_bw(base_size = 24) +
+    theme(
+        legend.position = 'right',
+        legend.background = element_rect(),
+        plot.title = element_text(angle = 0, size = 16, face = 'bold', vjust = 1),
+        plot.subtitle = element_text(angle = 0, size = 14, face = 'bold', vjust = 1),
+        plot.caption = element_text(angle = 0, size = 12, face = 'bold', vjust = 1),
+        axis.text.x = element_text(angle = 0, size = 12, face = 'bold', hjust = 1.10),
+        axis.text.y = element_text(angle = 0, size = 12, face = 'bold', vjust = 0.5),
+        axis.title = element_text(size = 12, face = 'bold'),
+        axis.title.x = element_text(size = 12, face = 'bold'),
+        axis.title.y = element_text(size = 12, face = 'bold'),
+        axis.line = element_line(colour = 'black'),
+        #Legend
+        legend.key = element_blank(), # removes the border
+        legend.key.size = unit(1, "cm"), # Sets overall area/size of the legend
+        legend.text = element_text(size = 14, face = "bold"), # Text size
+        title = element_text(size = 14, face = "bold")) +xlab('Enrichment score') + ylab('')
+
+
+## Complex Heatmap (Fig5.F)
+# Load packages
+library(ComplexHeatmap)
+library(circlize)
+library(dplyr)
+library(tidyverse)
+# Load and modify data
+exprsFile <- "~/Data/FABP45_bulkRNAseq/Heatmaps/Heatmap_PH_Glycolysis_related_genes.txt"
+exprs <- read.table(exprsFile, header = TRUE, sep = "\t", row.names = 1)
+data <- exprs[,2:10]
+head(data)
+# Scale data by row
+mat_scaled = t(scale(t(data)))
+# Generate row annotation
+Hallmark <- exprs[,1]
+activity=list(Hallmark=c("PH" = "#d07b70", "Glycolysis" = "#5fb6c1"))
+ha_d = HeatmapAnnotation(Hallmark=Hallmark, which = "row", width = unit(4, "mm"), col = activity)
+# Draw Heatmaps
+Heatmap(mat_scaled, name = "Z-score", col=brewer.pal(11,"RdBu"), left_annotation = ha_d, show_row_names = TRUE, row_order = 28:1, row_names_gp = gpar(fontsize = 10), column_order= 1:9)
+
+
+## DimPlot of whole lung from WT, CKO, TKO (Fig6.A, Ext Fig3.A B, Ext Fig4.A, Ext Fig8, Ext Fig10)
+sc.cols = c("#FFB300", "#803E75", "#FF6800", "#A6BDD7", "#C10020", "#CEA262", "#817066", "#007D34", "#F6768E", "#00538A", "#FF7A5C", "#53377A", "#FF8E00", "#B32851", 
+            "#F4C800", "#7F180D", "#93AA00", "#593315", "#F13A13", "#232C16","#FF0000", "#00A08A", "#F2AD00", "#F98400", "#5BBCD6","#2E00FF", "#9408F7", "#371377", 
+            "#7700FF", "#9E0142", "#FF0080", "#F8766D", "#00A9FF", "#E68613", "#8494FF")
+DimPlot(lung.combined, cols = sc.cols, split.by = "orig.ident")
+
+
+## Stacked Bar Plot for cluster proportions in scRNAseq (Fig6.B, Ext Fig4.B)
+library(ggplot2)
+library(RColorBrewer)
+propFile <- "~/Data/FABP45_ecRNAseq/EC_Subclusters_Proportion.txt"
+prop <- read.table(propFile, header = TRUE, sep = "\t")
+prop$Clusters <- as.character(prop$Clusters)
+# Draw Stacked Plot 
+ggplot(prop, aes(x=orig.ident, y = Freq, fill = Clusters)) 
++ theme_bw(base_size = 15) + geom_col(position = "fill", width = 0.5) 
++ xlab("Sample") + ylab("Proportion") 
++ scale_fill_manual(values = sc.cols) 
++ theme(legend.title = element_blank())
+
+
+## Heatmap of selected EC genes (Fig6.E)
+library(RColorBrewer)
+ec.genes <- c("Fabp4", "Cxcl12", "Eno1", "Ldha", "Gapdh", "Pgk1", "Pkm", "Tpi1", "Fabp5", "Mif", "Ndrg1", "Edn1", "Pfkl", "Serpine1", "Lpl", "Pkig", "Gpx1", "Plod1", "Pgam1", "Phlda3")
+Idents(lung.combined) <- "orig.ident"
+DoHeatmap(lung.ec, features = ec.genes, group.colors = c("#FF7A5C", "#5BBCD6", "#F4C800")) + scale_fill_gradientn(colors = colorRampPalette(brewer.pal(10, "RdBu"))(256))
+
+
+## Glycolysis Score by violin plot (Fig6.F, Ext Fig.5)
+glycolysis.genes <- c("Eno1", "Ldha", "Pgk1", "Pgm2", "Ppf1a4", "Slc16a3", "Tpi1", "Pgam1", "Pkm", "Artn", "Adora2b", "Pfkp")
+lung.combined <- AddModuleScore(lung.combined, features = list(glycolysis.genes), name="Glycolysis_Score")
+Idents(lung.combined) <- "orig.ident"
+VlnPlot(lung.combined, features = "Glycolysis_Score", cols = c("#FF7A5C", "#5BBCD6", "#F4C800"))
+Idents(lung.combined) <- "celltype"
+VlnPlot(lung.combined, features = "Glycolysis_Score", split.by = "orig.ident", cols = c("#FF7A5C", "#5BBCD6", "#F4C800"))
+
+## Heatmap (Fig8.C)
+exprsFile <- "~/Data/FABP45_bulkRNAseq/Heatmaps/Heatmap_bulkRNAseq_Fig8C.txt"
+exprs <- as.matrix(read.table(exprsFile, header = TRUE, sep = "\t", row.names = 1, as.is = TRUE))
+exp <- log2(exprs+1)
+hmcol <- colorRampPalette(brewer.pal(10, "RdBu"))(256)
+heatmap(exp, Colv = NA, col = hmcol)
+
+
+## Volcano Plot (Ext Fig3.A B C)
+# Load package and file
+library(EnhancedVolcano)
+exprsFile <- "~/Data/FABP45_bulkRNAseq/Volcano_Plot_DEGs_TKO_vs_WT.txt"
+res1 <- read.table(exprsFile, row.names = 1, header=TRUE, sep="\t", stringsAsFactors = FALSE)
+# Setup cutoff
+FC <- 0.585
+p <- 0.05
+# Define colors
+keyvals <- rep('grey75', nrow(res1))
+names(keyvals) <- rep('NS', nrow(res1))
+keyvals[which(abs(res1$log2FoldChange) < FC & res1$pvalue < p)] <- 'grey75'
+names(keyvals)[which(abs(res1$log2FoldChange)  < FC & res1$pvalue < p)] <- 'NS'
+# Down-regulated
+keyvals[which(res1$log2FoldChange < -FC & res1$pvalue < p)] <- 'blue2'
+names(keyvals)[which(res1$log2FoldChange  < -FC & res1$pvalue < p)] <- 'Significantly down-regulated'
+#Up-regulated
+keyvals[which(res1$log2FoldChange > FC & res1$pvalue < p)] <- 'red2'
+names(keyvals)[which(res1$log2FoldChange > FC & res1$pvalue < p)] <- 'Significantly up-regulated'
+# Check key values
+unique(keyvals)
+unique(names(keyvals))
+# Draw plot
+EnhancedVolcano(res1,
++                 lab = NA,
++                 x = 'log2FoldChange',
++                 y = 'pvalue',
++                 #selectLab = rownames(res2)[which(names(keyvals) %in% c('NS','log2FoldChange','-Log10Q','low','high'))],
++                 xlim = c(-12,12),
++                 ylim = c(-0.5,7120),
++                 xlab = bquote(~Log[2]~ 'fold change'),
++                 ylab = bquote(~-Log[10] ~ italic(P)),
++                 title = 'CKO_vs_WT',
++                 pCutoff = 0.05,
++                 FCcutoff = 0.585,
++                 pointSize = 2.5,
++                 labSize = 4.5,
++                 colCustom = keyvals,
++                 colAlpha = 0.75,
++                 legendPosition = 'right',
++                 legendLabSize = 15,
++                 legendIconSize = 5.0,
++                 drawConnectors = FALSE,
++                 widthConnectors = 0.5,
++                 colConnectors = 'grey75',
++                 gridlines.major = TRUE,
++                 gridlines.minor = FALSE,
++                 border = 'partial',
++                 borderWidth = 1.5,
++                 borderColour = 'black')
+
+
+## Enrichment Bar Charts with ggplot2 (Ext Fig3. D E F)
+# load libraries
+library(ggplot2)
+# load data
+exprsFile <- "~/Data/FABP45_scRNAseq/Analysis/Pathway_Enrichment/Bar_Chart_GO_Dn_Genes_EC_CKO_vs_WT.txt"
+df <- read.table(exprsFile, header=TRUE, as.is=TRUE, sep = "\t")
+# with unique color
+ggplot(df, aes(x=reorder(Term_Description,adjust_p), y=adjust_p))+geom_bar(stat="identity", fill="blue")+geom_col(position="dodge", width=0.4, size=0.7)+coord_flip()+xlab("")+ylab("-log10(adj_p)")+theme_bw()
+
+
+## Dotplot (Ext Data Fig3.C)
+markers.to.plot <- c("Cdh5", "Pecam1", "Emcn", "Aqp5", "Ager", "Rtkn2", "Sftpb", "Lamp3", "Notch3",
+    "Acta2", "Myh11", "Cnn1", "Fn1", "Col1a1", "Gm867", "Cdhr3", "Scgb3a2", "Olr1", "F7", "Atp6v0d2", 
+    "C1qa", "C1qb", "Ms4a7", "Ifitm6", "Gpr141", "Xcr1", "Sept3", "S100a9", "S100a8", "Mmp9", "Mmp9", 
+    "Ighm", "Cd79a", "Cd3g", "Cd3e", "Trac", "Klrb1c", "Klre1", "Ncr1", "Ccl21a", "Prox1", "Reln", "Top2a", "Mki67")
+DotPlot(lung.combined, features = markers.to.plot, dot.scale = 8) + RotatedAxis()
+
+
+## Single cell proportion test (Ext Fig3.D, Ext Fig4.D)
+library("scProportionTest")
+prop_test <- sc_utils(ec.combined)
+prop_test <- permutation_test(
+	prop_test, cluster_identity = "ec.sub",
+	sample_1 = "WT", sample_2 = "CKO",
+	sample_identity = "orig.ident"
+)
+permutation_plot(prop_test)
+
+
+## FeaturePlot of EC markers (Ext Fig4. C)
+gCapillary.enriched  <- c("Aplnr","Plvap", "Gpihbp1","Socs3", "Cd93", "Sema3c")
+lung.combined <- AddModuleScore(lung.combined, features = list(gCapillary.enriched), name="gCapillary_enriched")
+FeaturePlot(ec.combined, features = "gCapillary_enriched", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+aCapillary.enriched  <- c("Chst1", "Tbx2", "Car4", "Igfbp7", "Fibin", "Ednrb", "Tbx2", "Cdkn2b", "Ptprb")
+lung.combined <- AddModuleScore(lung.combined, features = list(aCapillary.enriched), name="aCapillary_enriched")
+FeaturePlot(ec.combined, features = "aCapillary_enriched", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Artery.enriched  <- c("Mgp", "Cxcl12", "Tm4sf1", "Plat", "Gja4", "Plac8", "Mecom", "Atp13a3", "Gja5")
+lung.combined <- AddModuleScore(lung.combined, features = list(Artery.enriched), name="Artery_enriched")
+FeaturePlot(ec.combined, features = "Artery_enriched", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+Vein.enriched  <- c("Prss23", "Slc6a2", "Vwf", "Cd200", "Bgn", "Ackr3", "Lyve1", "Tmem252", "Amigo2", "Vcam1")
+lung.combined <- AddModuleScore(lung.combined, features = list(Vein.enriched), name="Vein_enriched")
+FeaturePlot(ec.combined, features = "Vein_enriched", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
