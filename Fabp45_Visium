@@ -189,8 +189,8 @@ SpatialFeaturePlot(visum_TKO.merge, features = c("AlvFib"), pt.size.factor = 1.6
 
 DefaultAssay(visum_TKO.merge) <- "Spatial"
 SpatialFeaturePlot(visum_TKO.merge, features = c("Notch4", "Hey1", "Epas1", "Sox17", "Egr1", "Atf4", "Klf4", "Klf2"), ncol = 6)
-SpatialFeaturePlot(visum_TKO.merge, features = c("Bmpr2"), ncol = 3)
-SpatialFeaturePlot(visum_TKO.merge, features = c("Pdgfb"), ncol = 3)
+SpatialFeaturePlot(visum_TKO.merge, features = c("Ednrb"), ncol = 3)
+SpatialFeaturePlot(visum_TKO.merge, features = c("Ghibp1"), ncol = 3)
                                                  
 saveRDS(visum_TKO.merge, file = "~/R/Visium/visum_TKO.merge.rds")
 
