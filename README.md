@@ -1,0 +1,2 @@
+Liu B, Yi D, Li S, Ramirez K, Xia X, Cao Y, Zhao H, Tripathi A, Qiu S, Kala M, Rafikov R, Gu H, De Jesus Perez V, Lemay S-E, Glembotski CC, Knox KS, Bonnet S, Kalinichenko VV, Zhao YY, Fallon MB, Boucherat O, Dai Z. Endothelial fatty acid-binding proteins contribute to the pathogenesis of pulmonary hypertension. BioRxiv. 2024. Available from: http://biorxiv.org/lookup/doi/10.1101/2024.02.11.579846
+
