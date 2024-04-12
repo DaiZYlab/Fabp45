@@ -233,3 +233,9 @@ FeaturePlot(ec.combined, features = "Artery_enriched", label = TRUE, repel = TRU
 Vein.enriched  <- c("Prss23", "Slc6a2", "Vwf", "Cd200", "Bgn", "Ackr3", "Lyve1", "Tmem252", "Amigo2", "Vcam1")
 lung.combined <- AddModuleScore(lung.combined, features = list(Vein.enriched), name="Vein_enriched")
 FeaturePlot(ec.combined, features = "Vein_enriched", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
+
+##Visum data (Fig 7)
+SpatialFeaturePlot(visum_TKO.merge, features = c("ArtEC", "Cap"), pt.size.factor = 1.6, ncol = 3, crop = TRUE)
+SpatialFeaturePlot(visum_TKO.merge, features = c("Gpihbp1"), ncol = 3)
+SpatialFeaturePlot(visum_TKO.merge, features = c("Ednrb"), ncol = 3)
+
