@@ -1,0 +1,198 @@
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+
+WT_visium.data <- Load10X_Spatial(data.dir = "~/R/Visium/WT/", slice = "WT")
+CKO_visium.data <- Load10X_Spatial(data.dir = "~/R/Visium/CKO/", slice = "CKO")
+TKO_visium.data <- Load10X_Spatial(data.dir = "~/R/Visium/TKO/", slice = "TKO")
+
+plot1 <- VlnPlot(WT_visium.data, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(WT_visium.data, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+plot1 <- VlnPlot(CKO_visium.data, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(CKO_visium.data, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+plot1 <- VlnPlot(TKO_visium.data, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+plot2 <- SpatialFeaturePlot(TKO_visium.data, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+WT_visium.data <- SCTransform(WT_visium.data, assay = "Spatial", verbose = FALSE)
+CKO_visium.data <- SCTransform(CKO_visium.data, assay = "Spatial", verbose = FALSE)
+TKO_visium.data <- SCTransform(TKO_visium.data, assay = "Spatial", verbose = FALSE)
+
+WT_visium.data <- RunPCA(WT_visium.data, assay = "SCT", verbose = FALSE)
+WT_visium.data <- FindNeighbors(WT_visium.data, reduction = "pca", dims = 1:30)
+WT_visium.data <- FindClusters(WT_visium.data, verbose = FALSE)
+WT_visium.data <- RunUMAP(WT_visium.data, reduction = "pca", dims = 1:30)
+
+CKO_visium.data <- RunPCA(CKO_visium.data, assay = "SCT", verbose = FALSE)
+CKO_visium.data <- FindNeighbors(CKO_visium.data, reduction = "pca", dims = 1:30)
+CKO_visium.data <- FindClusters(CKO_visium.data, verbose = FALSE)
+CKO_visium.data <- RunUMAP(CKO_visium.data, reduction = "pca", dims = 1:30)
+
+TKO_visium.data <- RunPCA(TKO_visium.data, assay = "SCT", verbose = FALSE)
+TKO_visium.data <- FindNeighbors(TKO_visium.data, reduction = "pca", dims = 1:30)
+TKO_visium.data <- FindClusters(TKO_visium.data, verbose = FALSE)
+TKO_visium.data <- RunUMAP(TKO_visium.data, reduction = "pca", dims = 1:30)
+
+saveRDS(CKO_visium.data, file = "~/R/Visium/CKO_visium.data.rds")
+saveRDS(WT_visium.data, file = "~/R/Visium/WT_visium.data.rds")
+saveRDS(TKO_visium.data, file = "~/R/Visium/TKO_visium.data.rds")
+
+#
+SpatialDimPlot(CKO_visium.data, cells.highlight = CellsByIdentities(object = CKO_visium.data, idents = c(2, 1, 4, 3, 5, 8,6,7,9,10,0)), facet.highlight = TRUE, ncol = 3)
+SpatialDimPlot(CKO_visium.data, interactive = TRUE)
+SpatialFeaturePlot(CKO_visium.data, features = "Spp1", interactive = TRUE)
+LinkedDimPlot(CKO_visium.data)
+
+#Identification of Spatially Variable Features
+
+WT_visium.data <- FindSpatiallyVariableFeatures(WT_visium.data, assay = "SCT", features = VariableFeatures(WT_visium.data)[1:1000], selection.method = "markvariogram") # take a long time
+CKO_visium.data <- FindSpatiallyVariableFeatures(CKO_visium.data, assay = "SCT", features = VariableFeatures(CKO_visium.data)[1:1000], selection.method = "markvariogram") # take a long time
+TKO_visium.data <- FindSpatiallyVariableFeatures(TKO_visium.data, assay = "SCT", features = VariableFeatures(TKO_visium.data)[1:1000], selection.method = "markvariogram") # take a long time
+
+#Integration with single-cell data
+phd_ref <- readRDS("~/R/Phdtie2/phd_ZD.combined.rds")
+DimPlot(phd_ref, reduction = "umap", label = TRUE)
+
+phd_ref <- SCTransform(phd_ref, ncells = 3000, verbose = FALSE) %>%
+  RunPCA(verbose = FALSE) %>%
+  RunUMAP(dims = 1:30)
+
+DimPlot(phd_ref, group.by = "Celltype", label = TRUE)
+
+anchors <- FindTransferAnchors(reference = phd_ref, query = CKO_visium.data, normalization.method = "SCT")
+predictions.assay <- TransferData(anchorset = anchors, refdata = phd_ref$Celltype, prediction.assay = TRUE,
+                                  weight.reduction = CKO_visium.data[["pca"]], dims = 1:30)
+CKO_visium.data[["predictions"]] <- predictions.assay
+DefaultAssay(CKO_visium.data) <- "predictions"
+SpatialFeaturePlot(CKO_visium.data, features = c("ArtEC", "gCap", "AlvFib", "aMac", "iMac", "LEC", "SMC", "Pericyte", "PMN", "Tcell", "AdvFib", "AT2", "AT1", "Bcell", "NK", "Cilliated", "Club"), pt.size.factor = 1.6, ncol = 6, crop = TRUE)
+
+
+anchors <- FindTransferAnchors(reference = phd_ref, query = WT_visium.data, normalization.method = "SCT")
+predictions.assay <- TransferData(anchorset = anchors, refdata = phd_ref$Celltype, prediction.assay = TRUE,
+                                  weight.reduction = WT_visium.data[["pca"]], dims = 1:30)
+WT_visium.data[["predictions"]] <- predictions.assay
+DefaultAssay(WT_visium.data) <- "predictions"
+SpatialFeaturePlot(WT_visium.data, features = c("ArtEC", "gCap", "aCap","VeEC","AlvFib", "aMac", "iMac", "LEC", "SMC", "Pericyte", "PMN", "Tcell", "AdvFib", "AT2", "AT1", "Bcell", "NK", "Cilliated", "Club"), pt.size.factor = 1.6, ncol = 6, crop = TRUE)
+
+anchors <- FindTransferAnchors(reference = phd_ref, query = TKO_visium.data, normalization.method = "SCT")
+predictions.assay <- TransferData(anchorset = anchors, refdata = phd_ref$Celltype, prediction.assay = TRUE,
+                                  weight.reduction = TKO_visium.data[["pca"]], dims = 1:30)
+TKO_visium.data[["predictions"]] <- predictions.assay
+DefaultAssay(TKO_visium.data) <- "predictions"
+SpatialFeaturePlot(TKO_visium.data, features = c("ArtEC", "gCap", "aCap","VeEC","AlvFib", "aMac", "iMac", "LEC", "SMC", "Pericyte", "PMN", "Tcell", "AdvFib", "AT2", "AT1", "Bcell", "NK", "Cilliated", "Club"), pt.size.factor = 1.6, ncol = 6, crop = TRUE)
+
+
+SpatialFeaturePlot(WT_visium.data, features = c("ArtEC", "gCap"), pt.size.factor = 1.6, ncol = 2, crop = TRUE)
+SpatialFeaturePlot(CKO_visium.data, features = c("ArtEC", "gCap"), pt.size.factor = 1.6, ncol = 2, crop = TRUE)
+SpatialFeaturePlot(TKO_visium.data, features = c("ArtEC", "gCap"), pt.size.factor = 1.6, ncol = 2, crop = TRUE)
+
+#Working with multiple slices in Seurat
+samplename = WT_visium.data@meta.data$orig.ident
+batchid = rep("WT", length(samplename))
+names(batchid) = rownames(WT_visium.data@meta.data)
+WT_visium.data <- AddMetaData(object = WT_visium.data, metadata = batchid, col.name = "batchid")
+WT_visium.data$orig.ident <- WT_visium.data$batchid
+WT_visium.data$orig.ident
+
+samplename = CKO_visium.data@meta.data$orig.ident
+batchid = rep("CKO", length(samplename))
+names(batchid) = rownames(CKO_visium.data@meta.data)
+CKO_visium.data <- AddMetaData(object = CKO_visium.data, metadata = batchid, col.name = "batchid")
+CKO_visium.data$orig.ident <- CKO_visium.data$batchid
+CKO_visium.data$orig.ident
+
+samplename = TKO_visium.data@meta.data$orig.ident
+batchid = rep("TKO", length(samplename))
+names(batchid) = rownames(TKO_visium.data@meta.data)
+TKO_visium.data <- AddMetaData(object = TKO_visium.data, metadata = batchid, col.name = "batchid")
+TKO_visium.data$orig.ident <- TKO_visium.data$batchid
+TKO_visium.data$orig.ident
+
+#merge
+visum_WT_KO.merge <- merge(WT_visium.data, CKO_visium.data)
+
+DefaultAssay(visum_WT_KO.merge) <- "SCT"
+VariableFeatures(visum_WT_KO.merge) <- c(VariableFeatures(WT_visium.data), VariableFeatures(CKO_visium.data))
+visum_WT_KO.merge 
+visum_WT_KO.merge <- RunPCA(visum_WT_KO.merge, verbose = FALSE)
+visum_WT_KO.merge <- FindNeighbors(visum_WT_KO.merge, dims = 1:30)
+visum_WT_KO.merge <- FindClusters(visum_WT_KO.merge, verbose = FALSE)
+visum_WT_KO.merge <- RunUMAP(visum_WT_KO.merge, dims = 1:30)
+
+DimPlot(visum_WT_KO.merge, reduction = "umap", group.by = c("ident", "orig.ident"))
+
+SpatialDimPlot(visum_WT_KO.merge)
+SpatialFeaturePlot(visum_WT_KO.merge, features = c("Cxcl12"))
+
+DefaultAssay(visum_WT_KO.merge) <- "predictions"
+
+SpatialFeaturePlot(visum_WT_KO.merge, features = c("ArtEC", "gCap"))
+
+saveRDS(visum_WT_KO.merge, file = "~/R/Visium/visum_WT_KO.merge.rds")
+
+#Integration with single-cell data
+phd_ref <- readRDS("~/R/Phdtie2/phd_ZD.combined.rds")
+DimPlot(phd_ref, reduction = "umap", label = TRUE)
+
+phd_ref <- SCTransform(phd_ref, ncells = 3000, verbose = FALSE) %>%
+  RunPCA(verbose = FALSE) %>%
+  RunUMAP(dims = 1:30)
+
+DimPlot(phd_ref, group.by = "Celltype", label = TRUE)
+
+anchors <- FindTransferAnchors(reference = phd_ref, query = visum_WT_KO.merge, normalization.method = "SCT")
+predictions.assay <- TransferData(anchorset = anchors, refdata = phd_ref$Celltype, prediction.assay = TRUE,
+                                  weight.reduction = visum_WT_KO.merge[["pca"]], dims = 1:30)
+visum_WT_KO.merge[["predictions"]] <- predictions.assay
+DefaultAssay(visum_WT_KO.merge) <- "predictions"
+SpatialFeaturePlot(visum_WT_KO.merge, features = c("ArtEC", "gCap", "AlvFib", "aMac", "iMac", "LEC", "SMC", "Pericyte", "PMN", "Tcell", "AdvFib", "AT2", "AT1", "Bcell", "NK", "Cilliated", "Club"), pt.size.factor = 1.6, ncol = 6, crop = TRUE)
+
+
+SpatialFeaturePlot(visum_WT_KO.merge, features = c("ArtEC", "gCap"), pt.size.factor = 1.6, ncol = 2, crop = TRUE)
+
+DefaultAssay(visum_WT_KO.merge) <- "Spatial"
+SpatialFeaturePlot(visum_WT_KO.merge, features = c("Notch4", "Hey1", "Epas1", "Sox17", "Egr1", "Atf4", "Klf4", "Klf2", "Cdk19"), ncol = 6)
+SpatialFeaturePlot(visum_WT_KO.merge, features = c("Cxcl12"), ncol = 6)
+
+visum_WT_KO.merge <- FindSpatiallyVariableFeatures(visum_WT_KO.merge, assay = "SCT", features = VariableFeatures(visum_WT_KO.merge)[1:1000], selection.method = "markvariogram") # take a long time
+
+#merge
+visum_TKO.merge <- merge(visum_WT_KO.merge, TKO_visium.data)
+
+DefaultAssay(visum_TKO.merge) <- "SCT"
+VariableFeatures(visum_TKO.merge) <- c(VariableFeatures(WT_visium.data), VariableFeatures(CKO_visium.data),VariableFeatures(TKO_visium.data) )
+visum_TKO.merge 
+visum_TKO.merge <- RunPCA(visum_TKO.merge, verbose = FALSE)
+visum_TKO.merge <- FindNeighbors(visum_TKO.merge, dims = 1:30)
+visum_TKO.merge <- FindClusters(visum_TKO.merge, verbose = FALSE)
+visum_TKO.merge <- RunUMAP(visum_TKO.merge, dims = 1:30)
+
+DimPlot(visum_TKO.merge, reduction = "umap", group.by = c("ident", "orig.ident"))
+
+SpatialDimPlot(visum_TKO.merge)
+SpatialFeaturePlot(visum_TKO.merge, features = c("Cxcl12"))
+
+#Integration with single-cell data
+anchors <- FindTransferAnchors(reference = phd_ref, query = visum_TKO.merge, normalization.method = "SCT")
+predictions.assay <- TransferData(anchorset = anchors, refdata = phd_ref$Celltype, prediction.assay = TRUE,
+                                  weight.reduction = visum_TKO.merge[["pca"]], dims = 1:30)
+visum_TKO.merge[["predictions"]] <- predictions.assay
+DefaultAssay(visum_TKO.merge) <- "predictions"
+
+SpatialFeaturePlot(visum_TKO.merge, features = c("ArtEC", "gCap"), pt.size.factor = 1.6, ncol = 3, crop = TRUE)
+SpatialFeaturePlot(visum_TKO.merge, features = c("AlvFib"), pt.size.factor = 1.6, ncol = 3, crop = TRUE)
+
+DefaultAssay(visum_TKO.merge) <- "Spatial"
+SpatialFeaturePlot(visum_TKO.merge, features = c("Notch4", "Hey1", "Epas1", "Sox17", "Egr1", "Atf4", "Klf4", "Klf2"), ncol = 6)
+SpatialFeaturePlot(visum_TKO.merge, features = c("Bmpr2"), ncol = 3)
+SpatialFeaturePlot(visum_TKO.merge, features = c("Pdgfb"), ncol = 3)
+                                                 
+saveRDS(visum_TKO.merge, file = "~/R/Visium/visum_TKO.merge.rds")
+
+saveRDS(visum_iCKO.merge, file = "~/R/Visium/visum_iCKO.merge.rds")
+
