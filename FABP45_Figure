@@ -99,7 +99,7 @@ sc.cols = c("#FFB300", "#803E75", "#FF6800", "#A6BDD7", "#C10020", "#CEA262", "#
 DimPlot(lung.combined, cols = sc.cols, split.by = "orig.ident")
 
 
-## Stacked Bar Plot for cluster proportions in scRNAseq (Fig6.B, Ext Fig4.B)
+## Stacked Bar Plot for cluster proportions in scRNAseq (Fig7.B, Ext Fig4.B)
 library(ggplot2)
 library(RColorBrewer)
 propFile <- "~/Data/FABP45_ecRNAseq/EC_Subclusters_Proportion.txt"
@@ -120,7 +120,7 @@ Idents(lung.combined) <- "orig.ident"
 DoHeatmap(lung.ec, features = ec.genes, group.colors = c("#FF7A5C", "#5BBCD6", "#F4C800")) + scale_fill_gradientn(colors = colorRampPalette(brewer.pal(10, "RdBu"))(256))
 
 
-## Glycolysis Score by violin plot (Fig6.F, Ext Fig.5)
+## Glycolysis Score by violin plot (Fig6.F, Ext Fig.4)
 glycolysis.genes <- c("Eno1", "Ldha", "Pgk1", "Pgm2", "Ppf1a4", "Slc16a3", "Tpi1", "Pgam1", "Pkm", "Artn", "Adora2b", "Pfkp")
 lung.combined <- AddModuleScore(lung.combined, features = list(glycolysis.genes), name="Glycolysis_Score")
 Idents(lung.combined) <- "orig.ident"
@@ -128,7 +128,7 @@ VlnPlot(lung.combined, features = "Glycolysis_Score", cols = c("#FF7A5C", "#5BBC
 Idents(lung.combined) <- "celltype"
 VlnPlot(lung.combined, features = "Glycolysis_Score", split.by = "orig.ident", cols = c("#FF7A5C", "#5BBCD6", "#F4C800"))
 
-## Heatmap (Fig8.C)
+## Heatmap (Fig9.C)
 exprsFile <- "~/Data/FABP45_bulkRNAseq/Heatmaps/Heatmap_bulkRNAseq_Fig8C.txt"
 exprs <- as.matrix(read.table(exprsFile, header = TRUE, sep = "\t", row.names = 1, as.is = TRUE))
 exp <- log2(exprs+1)
@@ -206,7 +206,7 @@ markers.to.plot <- c("Cdh5", "Pecam1", "Emcn", "Aqp5", "Ager", "Rtkn2", "Sftpb",
 DotPlot(lung.combined, features = markers.to.plot, dot.scale = 8) + RotatedAxis()
 
 
-## Single cell proportion test (Ext Fig3.D, Ext Fig4.D)
+## Single cell proportion test (Fig7.D, Fi7.D)
 library("scProportionTest")
 prop_test <- sc_utils(ec.combined)
 prop_test <- permutation_test(
@@ -217,7 +217,7 @@ prop_test <- permutation_test(
 permutation_plot(prop_test)
 
 
-## FeaturePlot of EC markers (Ext Fig4. C)
+## FeaturePlot of EC markers (Ext Fig5)
 gCapillary.enriched  <- c("Aplnr","Plvap", "Gpihbp1","Socs3", "Cd93", "Sema3c")
 lung.combined <- AddModuleScore(lung.combined, features = list(gCapillary.enriched), name="gCapillary_enriched")
 FeaturePlot(ec.combined, features = "gCapillary_enriched", label = TRUE, repel = TRUE) + scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "RdBu")))
