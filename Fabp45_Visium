@@ -194,5 +194,4 @@ SpatialFeaturePlot(visum_TKO.merge, features = c("Ghibp1"), ncol = 3)
                                                  
 saveRDS(visum_TKO.merge, file = "~/R/Visium/visum_TKO.merge.rds")
 
-saveRDS(visum_iCKO.merge, file = "~/R/Visium/visum_iCKO.merge.rds")
 
