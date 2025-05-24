@@ -1,4 +1,4 @@
-### Analysis of FABP4/5 Paper_Figures
+### Analysis of FABP4/5 Paper_Figures, the order of the figures were changed when the paper was published. 
 
 ## VlnPlot of Fabp4 and Fabp5 (Fig1.A)
 Idents(lung.combined) <- "orig.ident"
