@@ -17,9 +17,9 @@ wt.counts <- Read10X(data.dir = "./Raw_data/WT/filtered_feature_bc_matrix/")
 wt <- CreateSeuratObject(counts = wt.counts, project = "WT", min.cells = 3, min.features = 200)
 
 cko.counts <- Read10X(data.dir = "./Raw_data/CKO/filtered_feature_bc_matrix/")
-cko <- CreateSeuratObject(counts = wk6.2.counts, project = "CKO", min.cells = 3, min.features = 200)
+cko <- CreateSeuratObject(counts = cko.counts, project = "CKO", min.cells = 3, min.features = 200)
 
-phd_Feature.data <- Read10X(data.dir = "~/Raw_data/CD133/filtered_feature_bc_matrix/")
+phd_Feature.data <- Read10X(data.dir = "~/Raw_data/phd_Feature/filtered_feature_bc_matrix/")
 rownames(x = phd_Feature.data[["Antibody Capture"]]) <- gsub(pattern = "_[control_]*TotalB",replacement = "",x = rownames(x = phd_Feature.data[["Antibody Capture"]]))
 WT_Feature <- CreateSeuratObject(counts = phd_Feature.data[["Gene Expression"]], project = "WT", min.cells = 3, min.features = 200)
 CKO_Feature <- CreateSeuratObject(counts = phd_Feature.data[["Gene Expression"]], project = "CKO", min.cells = 3, min.features = 200)
